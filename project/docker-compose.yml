@@ -1,0 +1,80 @@
+version: '3'
+
+services:
+  # PHP 开发环境
+  php:
+    build: 
+      context: ./docker/php
+      args:
+        BUILDPLATFORM: linux/arm64
+    ports:
+      - "8001:80"
+    volumes:
+      - ./php-src:/var/www/html
+      - ./docker/php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+    environment:
+      PHP_IDE_CONFIG: serverName=php-docker
+      XDEBUG_MODE: debug
+      XDEBUG_CONFIG: client_host=host.docker.internal client_port=9003
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # WordPress 环境
+  wordpress:
+    depends_on:
+      - db
+    build:
+      context: ./docker/wordpress
+      args:
+        BUILDPLATFORM: linux/arm64
+    ports:
+      - "8000:80"
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wp-content:/var/www/html/wp-content
+      - ./docker/php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_TABLE_PREFIX: wp_
+      WORDPRESS_DEBUG: 1
+      XDEBUG_MODE: debug
+      XDEBUG_CONFIG: client_host=host.docker.internal client_port=9003
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 共用数据库
+  db:
+    image: mysql:8.0
+    platform: linux/arm64
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+    command: '--default-authentication-plugin=mysql_native_password'
+    cap_add:
+      - SYS_NICE
+
+  # 使用支持 ARM 的替代镜像
+  phpmyadmin:
+    image: arm64v8/phpmyadmin:latest
+    platform: linux/arm64
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: root
+    depends_on:
+      - db
+
+volumes:
+  db_data: {}
+  wordpress_data: {}
